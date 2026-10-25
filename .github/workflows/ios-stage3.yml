@@ -1,0 +1,51 @@
+name: Phase Distorter iOS Stage 3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure iPhone build
+        run: |
+          cmake -S . -B build/ios-stage3 -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DEB_BUILD_FRONTEND=OFF \
+            -DEB_BUILD_TESTS=OFF
+
+      - name: Build iPhone application
+        run: |
+          cmake --build build/ios-stage3 \
+            --config Release \
+            --target PhaseDistorterIOS \
+            --parallel 2
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find build/ios-stage3 -type d -name 'PhaseDistorter.app' -print -quit)
+          test -n "$APP"
+          mkdir -p dist/Payload
+          cp -R "$APP" dist/Payload/
+          (cd dist && zip -qr PhaseDistorter-Stage3-unsigned.ipa Payload)
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhaseDistorter-Stage3-IPA
+          path: dist/PhaseDistorter-Stage3-unsigned.ipa
+          retention-days: 7
