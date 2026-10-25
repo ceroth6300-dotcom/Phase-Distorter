@@ -1,5 +1,5 @@
 
-name: iOS Port Check
+name: iOS C++20 Compile Test
 
 on:
   workflow_dispatch:
@@ -8,21 +8,42 @@ on:
       - ".github/workflows/ios-build.yml"
 
 jobs:
-  inspect:
+  ios-compile:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Check Xcode
+      - name: Inspect iOS compiler
         run: |
           xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphoneos --find clang++
 
-      - name: Inspect source files
+      - name: Compile C++20 for iPhone
         run: |
-          pwd
-          ls -la
+          cat > /tmp/ios-test.cpp <<'EOF'
+          #include <array>
+          #include <cstdint>
+
+          extern "C" int ios_port_test() {
+              constexpr std::array<int, 3> values{1, 2, 3};
+              return values[0] + values[1] + values[2];
+          }
+          EOF
+
+          xcrun --sdk iphoneos clang++ \
+            -std=c++20 \
+            -arch arm64 \
+            -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            -c /tmp/ios-test.cpp \
+            -o /tmp/ios-test.o
+
+          file /tmp/ios-test.o
+
+      - name: Inspect game build files
+        run: |
+          ls -la cpp
           find . -maxdepth 3 -name 'CMakeLists.txt'
+          grep -nE 'SDL|OpenGL|add_executable|add_library' \
+            CMakeLists.txt || true
