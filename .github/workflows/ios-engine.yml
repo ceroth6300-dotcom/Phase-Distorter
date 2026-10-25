@@ -1,17 +1,11 @@
 
-name: Phase Distorter iOS Engine
+name: Phase Distorter iOS Engine Stage 2
 
 on:
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Engine build target"
-        type: choice
-        required: true
-        default: foundation
-        options:
-          - foundation
-          - session
+  push:
+    paths:
+      - ".github/workflows/ios-engine.yml"
 
 jobs:
   compile-ios:
@@ -40,32 +34,30 @@ jobs:
             -DEB_BUILD_FRONTEND=OFF \
             -DEB_BUILD_TESTS=OFF
 
-      - name: Compile game engine
+      - name: Compile all engine libraries
         shell: bash
         run: |
           mkdir -p ios-report
-          TARGET="${{ inputs.target }}"
-          TARGET="${TARGET:-foundation}"
-
-          if [ "$TARGET" = session ]; then
-            TARGETS="eb_session"
-          else
-            TARGETS="eb_scene eb_assets eb_filter eb_native_engine"
-          fi
-
           set -o pipefail
-          for LIB in $TARGETS; do
+
+          for LIB in eb_scene eb_assets eb_filter eb_native_engine eb_session; do
+            echo "Building $LIB"
             cmake --build build/ios \
               --config Release \
               --target "$LIB" \
-              --parallel 2 2>&1 \
-              | tee -a ios-report/build.log
+              --parallel 2 2>&1 | tee -a ios-report/build.log
           done
 
-      - name: Upload logs
+      - name: Inspect built libraries
+        if: success()
+        run: |
+          find build/ios -type f -name '*.a' \
+            -print | tee ios-report/libraries.txt
+
+      - name: Upload build report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-engine-report
+          name: ios-stage2-engine-report
           path: ios-report/
           if-no-files-found: warn
