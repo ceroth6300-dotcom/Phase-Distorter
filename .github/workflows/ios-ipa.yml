@@ -1,0 +1,91 @@
+name: Phase Distorter iPhone IPA Prototype
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build unsigned iPhoneOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/Payload/PhaseDistorter.app
+          APP="$PWD/build/Payload/PhaseDistorter.app"
+          cat > "$RUNNER_TEMP/main.swift" <<'SWIFT'
+          import UIKit
+
+          final class GameViewController: UIViewController {
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  view.backgroundColor = .black
+                  let label = UILabel()
+                  label.text = "Phase Distorter iOS\nDevice build prototype"
+                  label.numberOfLines = 2
+                  label.textAlignment = .center
+                  label.textColor = .white
+                  label.font = .systemFont(ofSize: 23, weight: .bold)
+                  label.translatesAutoresizingMaskIntoConstraints = false
+                  view.addSubview(label)
+                  NSLayoutConstraint.activate([
+                      label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                      label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                      label.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 16),
+                      label.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -16)
+                  ])
+              }
+          }
+
+          final class AppDelegate: UIResponder, UIApplicationDelegate {
+              var window: UIWindow?
+              func application(_ application: UIApplication,
+                               didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  let window = UIWindow(frame: UIScreen.main.bounds)
+                  window.rootViewController = GameViewController()
+                  window.makeKeyAndVisible()
+                  self.window = window
+                  return true
+              }
+          }
+          UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil,
+                            NSStringFromClass(AppDelegate.self))
+          SWIFT
+          cat > "$APP/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>PhaseDistorter</string>
+            <key>CFBundleIdentifier</key><string>dev.phasedistorter.prototype</string>
+            <key>CFBundleName</key><string>Phase Distorter</string>
+            <key>CFBundleDisplayName</key><string>Phase Distorter</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>0.1</string>
+            <key>CFBundleVersion</key><string>1</string>
+            <key>LSRequiresIPhoneOS</key><true/>
+            <key>UILaunchScreen</key><dict/>
+            <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+            <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+          </dict></plist>
+          PLIST
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun swiftc -sdk "$SDK" -target arm64-apple-ios16.0 \
+            -module-name PhaseDistorter -emit-executable \
+            "$RUNNER_TEMP/main.swift" -o "$APP/PhaseDistorter"
+          plutil -lint "$APP/Info.plist"
+          file "$APP/PhaseDistorter"
+          mkdir -p dist
+          (cd build && zip -qr ../dist/PhaseDistorter-unsigned.ipa Payload)
+          echo 'Unsigned iPhoneOS IPA created; it is not signed or gameplay-enabled.'
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhaseDistorter-unsigned-iPhoneOS-IPA
+          path: dist/PhaseDistorter-unsigned.ipa
+          retention-days: 7
