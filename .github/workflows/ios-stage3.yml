@@ -1,3 +1,4 @@
+
 name: Phase Distorter iOS Stage 3
 
 on:
@@ -15,6 +16,14 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Check iOS files
+        run: |
+          test -f ios/PhaseApp.mm
+          test -f ios/Info.plist
+          test -f ios/ios-app.cmake
+          test -f cpp/CMakeLists.txt
+          xcodebuild -version
+
       - name: Configure iPhone build
         run: |
           cmake -S . -B build/ios-stage3 -G Xcode \
@@ -30,22 +39,43 @@ jobs:
         run: |
           cmake --build build/ios-stage3 \
             --config Release \
-            --target PhaseDistorterIOS \
+            --target phase_ios \
             --parallel 2
 
       - name: Package unsigned IPA
         shell: bash
         run: |
           set -euo pipefail
-          APP=$(find build/ios-stage3 -type d -name 'PhaseDistorter.app' -print -quit)
-          test -n "$APP"
+
+          APP=$(find build/ios-stage3 \
+            -type d \
+            -name 'PhaseDistorter.app' \
+            -print -quit)
+
+          if [ -z "$APP" ]; then
+            echo "ERROR: iPhone app not found"
+            exit 1
+          fi
+
+          test -f "$APP/Info.plist"
+          test -f "$APP/PhaseDistorter"
+
           mkdir -p dist/Payload
           cp -R "$APP" dist/Payload/
-          (cd dist && zip -qr PhaseDistorter-Stage3-unsigned.ipa Payload)
+
+          (
+            cd dist
+            zip -qr \
+              PhaseDistorter-Stage3-unsigned.ipa \
+              Payload
+          )
+
+          echo "Stage 3 unsigned IPA created"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: PhaseDistorter-Stage3-IPA
           path: dist/PhaseDistorter-Stage3-unsigned.ipa
+          if-no-files-found: error
           retention-days: 7
