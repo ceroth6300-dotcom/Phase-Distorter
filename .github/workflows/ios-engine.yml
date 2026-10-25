@@ -1,0 +1,71 @@
+
+name: Phase Distorter iOS Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Engine build target"
+        type: choice
+        required: true
+        default: foundation
+        options:
+          - foundation
+          - session
+
+jobs:
+  compile-ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Check source files
+        run: |
+          test -f cpp/CMakeLists.txt
+          test -f generated/program_sources.cmake
+          test -f generated/game_runtime_sources.cmake
+          xcodebuild -version
+
+      - name: Configure iOS engine
+        run: |
+          cmake -S . -B build/ios -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
+            -DEB_BUILD_FRONTEND=OFF \
+            -DEB_BUILD_TESTS=OFF
+
+      - name: Compile game engine
+        shell: bash
+        run: |
+          mkdir -p ios-report
+          TARGET="${{ inputs.target }}"
+          TARGET="${TARGET:-foundation}"
+
+          if [ "$TARGET" = session ]; then
+            TARGETS="eb_session"
+          else
+            TARGETS="eb_scene eb_assets eb_filter eb_native_engine"
+          fi
+
+          set -o pipefail
+          for LIB in $TARGETS; do
+            cmake --build build/ios \
+              --config Release \
+              --target "$LIB" \
+              --parallel 2 2>&1 \
+              | tee -a ios-report/build.log
+          done
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-engine-report
+          path: ios-report/
+          if-no-files-found: warn
