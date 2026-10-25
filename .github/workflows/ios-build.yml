@@ -47,3 +47,22 @@ jobs:
           find . -maxdepth 3 -name 'CMakeLists.txt'
           grep -nE 'SDL|OpenGL|add_executable|add_library' \
             CMakeLists.txt || true
+
+      - name: Compile real game source for iOS
+        run: |
+          SOURCE="cpp/src/game_session.cpp"
+
+          if [ ! -f "$SOURCE" ]; then
+            echo "Source file not found"
+            exit 1
+          fi
+
+          xcrun --sdk iphoneos clang++ \
+            -std=c++20 \
+            -arch arm64 \
+            -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            -Icpp/include \
+            -Igenerated \
+            -fsyntax-only "$SOURCE"
+
+
