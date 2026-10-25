@@ -51,3 +51,5 @@ if(TARGET eb_cpp)
         install(FILES "$<TARGET_FILE_DIR:eb_cpp>/SDL2.dll" DESTINATION .)
     endif()
 endif()
+
+include(ios/ios-app.cmake)
